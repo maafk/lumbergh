@@ -20,6 +20,7 @@ import { buildTagMenuItems } from './tagMenu'
 import { ReflogOverlay } from './ReflogPanel'
 import WorktreeOverlay from './WorktreeOverlay'
 import { manageableWorktreeCount } from '../../hooks/useWorktrees'
+import { readMineOnly, writeMineOnly } from '../../utils/graphMinePreference'
 import { HistorySearchOverlay } from './HistorySearchPanel'
 import { useGraphSearch } from './useGraphSearch'
 import type { ReflogEntry } from './ReflogPanel'
@@ -168,7 +169,6 @@ const DEFAULT_BRANCH_PANEL_WIDTH = 180
 const MIN_BRANCH_PANEL_WIDTH = 80
 const MAX_BRANCH_PANEL_WIDTH = 400
 const branchPanelStorageKey_PREFIX = 'lumbergh:branchPanelWidth'
-const mineOnlyStorageKey_PREFIX = 'lumbergh:gitGraphMineOnly'
 const DEFAULT_GRAPH_PANEL_WIDTH = 120
 const MIN_GRAPH_PANEL_WIDTH = 40
 const MAX_GRAPH_PANEL_WIDTH = 500
@@ -722,10 +722,7 @@ export default function GitGraph({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [commitLimit, setCommitLimit] = useState(100)
-  const mineOnlyStorageKey = storageKeyFor(mineOnlyStorageKey_PREFIX, sessionName)
-  const [mineOnly, setMineOnly] = useState(
-    () => localStorage.getItem(mineOnlyStorageKey) === 'true'
-  )
+  const [mineOnly, setMineOnly] = useState(readMineOnly)
   const [menuCommit, setMenuCommit] = useState<{
     hash: string
     shortHash: string
@@ -861,10 +858,10 @@ export default function GitGraph({
   const toggleMineOnly = useCallback(() => {
     setMineOnly((on) => {
       const next = !on
-      localStorage.setItem(mineOnlyStorageKey, String(next))
+      writeMineOnly(next)
       return next
     })
-  }, [mineOnlyStorageKey])
+  }, [])
 
   // A cursor only describes one shape of payload. Changing session, limit or
   // filter makes it meaningless, so drop it and take a fresh keyframe. Declared
