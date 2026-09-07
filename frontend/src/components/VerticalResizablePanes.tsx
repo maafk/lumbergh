@@ -109,14 +109,20 @@ export default function VerticalResizablePanes({
         {top}
       </div>
 
-      {/* Splitter */}
+      {/* Splitter. See ResizablePanes: 12px to grab, 2px drawn. */}
       <div
+        data-testid="pane-splitter"
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
-        className={`h-[2px] bg-border-default hover:bg-action cursor-row-resize transition-colors flex-shrink-0 touch-none ${
-          isDragging ? 'bg-action' : ''
-        }`}
-      />
+        className="group h-3 flex-shrink-0 cursor-row-resize touch-none flex flex-col justify-center"
+      >
+        <div
+          data-testid="pane-splitter-line"
+          className={`h-[2px] transition-colors group-hover:bg-action ${
+            isDragging ? 'bg-action' : 'bg-border-default'
+          }`}
+        />
+      </div>
 
       {/* Bottom pane */}
       <div style={{ height: `${100 - topHeight}%` }} className="w-full overflow-hidden">

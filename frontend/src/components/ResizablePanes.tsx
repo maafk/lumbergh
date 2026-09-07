@@ -125,14 +125,25 @@ export default function ResizablePanes({
 
       {!collapse && (
         <>
-          {/* Splitter */}
+          {/* Splitter. The grab area is 12px — matching the graph's panel
+              resizers — while the drawn line stays 2px: a 2px target is most of
+              a pixel of tolerance with a mouse and hopeless with a thumb.
+              Real layout width rather than an overlay pushed out with negative
+              margins, which would hang over each neighbour's content and eat
+              scrollbar drags to buy splitter drags. */}
           <div
+            data-testid="pane-splitter"
             onMouseDown={handleMouseDown}
             onTouchStart={handleTouchStart}
-            className={`w-[2px] bg-border-default hover:bg-action cursor-col-resize transition-colors flex-shrink-0 touch-none ${
-              isDragging ? 'bg-action' : ''
-            }`}
-          />
+            className="group w-3 flex-shrink-0 cursor-col-resize touch-none flex items-stretch justify-center"
+          >
+            <div
+              data-testid="pane-splitter-line"
+              className={`w-[2px] transition-colors group-hover:bg-action ${
+                isDragging ? 'bg-action' : 'bg-border-default'
+              }`}
+            />
+          </div>
         </>
       )}
 
