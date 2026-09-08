@@ -93,12 +93,32 @@ function listLines() {
   return lines;
 }
 
+// The preview's font is not the firmware's, so a line measured to fit 576px on the
+// lenses can still overrun 576px here — and clipping it loses the text the wearer opened
+// the page to read. The line *breaks* are the faithful part (they come from the
+// firmware's own metrics); the size is not, so the size gives way. Shrinks only, never
+// grows past the matched 21px.
+const PREVIEW_MAX_PX = 21;
+let previewPx = PREVIEW_MAX_PX;
+
+function fitPreview() {
+  previewPx = PREVIEW_MAX_PX;
+  el.read.style.fontSize = `${previewPx}px`;
+  // A handful of layout reads, only when the text changed. Floor of 11px: below that it
+  // is unreadable and clipping is the lesser evil.
+  while (previewPx > 11 && el.read.scrollWidth > 576) {
+    previewPx -= 0.5;
+    el.read.style.fontSize = `${previewPx}px`;
+  }
+}
+
 function render() {
   if (reader.isOpen()) {
     // The page keeps all ten lines; the dictation line floats over it in its own
     // bordered box rather than being appended to the text.
     const page = reader.visibleLines().join("\n");
     el.read.textContent = page;
+    fitPreview();
     el.body.classList.toggle("dictating", Boolean(heardText));
     el.dictation.textContent = heardText;
     renderLens({ reading: true, text: page, heard: heardText });
@@ -106,6 +126,7 @@ function render() {
   }
   const text = listLines().join("\n");
   el.read.textContent = text;
+  fitPreview();
   el.body.classList.toggle("dictating", Boolean(heardText));
   el.dictation.textContent = heardText;
   renderLens({ text, heard: heardText });

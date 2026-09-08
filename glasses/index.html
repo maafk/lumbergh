@@ -30,19 +30,19 @@
     flex: none;
     overflow: hidden;
     color: var(--fg);
-    /* No padding: both views own the whole frame, and an inset cost two lines of every
-       screenful. The 27px line height and 18px size are matched to the firmware font's
-       own metrics (measured via pretext: ~11px advance per glyph, 27px lines, so ten
-       lines to a frame) — otherwise the preview shows six lines where the lenses show
-       ten, and stops being a preview. */
+    /* Proportional, not monospace: the firmware font is proportional, and rendering
+       lines measured for it in a monospace face is wrong by up to 2x — a narrow-glyph
+       line came out 1.95x too wide, a wide-glyph one 0.81x. That is what made the
+       preview clip text and appear to re-break lines. 21px matches the firmware's ~11px
+       average advance; 27px lines are its measured line height, so ten fit the frame. */
     font:
-      18px/27px "DejaVu Sans Mono",
-      ui-monospace,
-      monospace;
+      21px/27px "DejaVu Sans",
+      system-ui,
+      sans-serif;
   }
   /* The session list and the reader are the same element — a page of lines. */
   #read {
-    white-space: pre-wrap;
+    white-space: pre;
   }
   /* Mirrors the lens overlay: same geometry, stacked over the page. The lenses need the
      rows behind it blanked, since a container there has no background; in the preview
@@ -59,7 +59,7 @@
     border: 2px solid var(--fg);
     border-radius: 6px;
     padding: 8px;
-    white-space: pre-wrap;
+    white-space: pre;
   }
   body.dictating #dictation {
     display: block;
