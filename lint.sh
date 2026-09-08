@@ -40,6 +40,18 @@ if ! npx tsc -b; then
   errors=1
 fi
 
+# ── Glasses HUD (plain ES modules, no build step) ───────────────────────
+heading "prettier --write (glasses)"
+cd "$ROOT"
+if ! npx --prefix frontend prettier --write --ignore-path .prettierignore glasses/; then
+  errors=1
+fi
+
+heading "eslint --fix (glasses)"
+if ! npx --prefix frontend eslint --fix --config frontend/eslint.glasses.config.js glasses/; then
+  errors=1
+fi
+
 # ── Result ───────────────────────────────────────────────────────────
 echo
 if [ "$errors" -ne 0 ]; then

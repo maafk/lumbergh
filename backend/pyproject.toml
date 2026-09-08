@@ -37,6 +37,9 @@ dependencies = [
     "tinydb",
     "gitpython>=3.1",
     "httpx>=0.27",
+    # Imported directly by the glasses STT proxy. uvicorn[standard] already pulls
+    # it in, but the import is ours now, so the dependency is declared rather than borrowed.
+    "websockets>=12",
     "cryptography>=42.0",
     "python-multipart",
     "pywinpty>=3.0.3; sys_platform == 'win32'",
@@ -103,6 +106,8 @@ max-complexity = 10
 [tool.ruff.lint.per-file-ignores]
 "lumbergh/tests/test_idle_detector.py" = ["RUF001"]  # fixture strings intentionally use "❯" (real pane content)
 "lumbergh/tests/test_spawn_delivery.py" = ["RUF001"]  # fixture strings intentionally use "❯" (real pane content)
+"lumbergh/tests/test_glasses_board.py" = ["RUF001"]  # fixture strings intentionally use "❯" (real pane content)
+"lumbergh/glasses/board.py" = ["RUF001"]  # pane-chrome patterns match the TUI's own glyphs
 
 [tool.mypy]
 python_version = "3.11"

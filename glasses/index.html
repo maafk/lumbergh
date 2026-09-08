@@ -1,0 +1,72 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Lumbergh HUD</title>
+<style>
+  :root {
+    --fg: #7cff9b;
+  }
+  html,
+  body {
+    margin: 0;
+    background: #000;
+  }
+  /* The viewport is whatever the phone gives us — a portrait WebView in the Even app, a
+     desktop window in dev. The HUD's own geometry is fixed at the glasses' 576x288, so it
+     lives in a stage of exactly that size, scaled to fit and centred. What you see is
+     then a faithful preview of the lens frame rather than a differently-shaped layout
+     that happens to share the code. */
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  #stage {
+    position: relative;
+    width: 576px;
+    height: 288px;
+    flex: none;
+    overflow: hidden;
+    color: var(--fg);
+    /* No padding: both views own the whole frame, and an inset cost two lines of every
+       screenful. The 27px line height and 18px size are matched to the firmware font's
+       own metrics (measured via pretext: ~11px advance per glyph, 27px lines, so ten
+       lines to a frame) — otherwise the preview shows six lines where the lenses show
+       ten, and stops being a preview. */
+    font:
+      18px/27px "DejaVu Sans Mono",
+      ui-monospace,
+      monospace;
+  }
+  /* The session list and the reader are the same element — a page of lines. */
+  #read {
+    white-space: pre-wrap;
+  }
+  /* Mirrors the lens overlay: same geometry, stacked over the page. The lenses need the
+     rows behind it blanked, since a container there has no background; in the preview
+     the browser composites it for us. */
+  #dictation {
+    display: none;
+    position: absolute;
+    left: 24px;
+    top: 180px;
+    width: 528px;
+    height: 90px;
+    box-sizing: border-box;
+    background: #000;
+    border: 2px solid var(--fg);
+    border-radius: 6px;
+    padding: 8px;
+    white-space: pre-wrap;
+  }
+  body.dictating #dictation {
+    display: block;
+  }
+</style>
+<div id="stage">
+  <div id="read"></div>
+  <div id="dictation"></div>
+</div>
+<script type="module" src="./main.js"></script>

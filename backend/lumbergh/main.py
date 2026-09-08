@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException, Request, Response, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from lumbergh.auth import AuthMiddleware
@@ -45,6 +46,7 @@ from lumbergh.models import (
 )
 from lumbergh.routers import agent, ai, backup, cloud, notes, sessions, settings, shared, tmux
 from lumbergh.routers import bill as bill_router
+from lumbergh.routers import glasses as glasses_router
 from lumbergh.routers import worktrees as worktrees_router
 
 configure_logging()
@@ -185,6 +187,7 @@ app.include_router(tmux.router)
 app.include_router(agent.router)
 app.include_router(worktrees_router.router)
 app.include_router(bill_router.router)
+app.include_router(glasses_router.router)
 
 # Project root (parent of backend/)
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -684,7 +687,6 @@ async def session_activity(websocket: WebSocket, session_name: str):
 def mount_frontend(app: FastAPI):
     """Mount frontend static files if a built frontend is available."""
     from starlette.responses import FileResponse
-    from starlette.staticfiles import StaticFiles
 
     # Look for frontend dist in package data first, then source tree
     dist_dir = None
@@ -721,6 +723,29 @@ def mount_frontend(app: FastAPI):
             pass
         return FileResponse(str(index_html))
 
+
+class _RevalidatedStatics(StaticFiles):
+    """Static files that must be re-checked on every load, not heuristically cached.
+
+    The HUD is a long-lived page on a device that is awkward to hard-reload — you cannot
+    open devtools on a pair of glasses. Serving only ETag/Last-Modified let a browser
+    keep a stale module indefinitely: a client fix shipped here and the glasses went on
+    running the old code, which is exactly how a corrected WebSocket URL failed to take
+    effect. `no-cache` still allows a 304, so revalidation is cheap — it just forbids
+    using the cached copy without asking.
+    """
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+_glasses_dir = PROJECT_ROOT / "glasses"
+if _glasses_dir.is_dir():
+    app.mount(
+        "/glasses", _RevalidatedStatics(directory=str(_glasses_dir), html=True), name="glasses"
+    )
 
 mount_frontend(app)
 

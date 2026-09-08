@@ -137,6 +137,13 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      // The glasses HUD is served by the backend's own static mount, not by Vite,
+      // so without this the SPA fallback answers /glasses/* with index.html — and
+      // the HUD's ES modules come back as HTML.
+      '/glasses': {
+        target: 'http://localhost:8420',
+        changeOrigin: true,
+      },
     },
   },
 })

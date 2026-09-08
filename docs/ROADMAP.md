@@ -60,6 +60,30 @@ The manager watches and comments. It doesn't drive sessions or make autonomous d
 
 ---
 
+## Phase 7.5: Glasses HUD Follow-ups
+
+**Why:** The G2 glasses HUD (`/glasses`, `backend/lumbergh/glasses/`) shipped as a
+working prototype. What it deferred needs to stay visible rather than evaporate:
+
+- **Auth on the board endpoint.** `GET /api/glasses/board` currently relies on
+  Tailscale reachability, same as the rest of the dashboard — explicit decision was
+  "prove it out then we lock it down." `/api/agent/*` remains localhost/token as
+  documented and was not widened to match.
+- **Gesture-based yes/no answering of permission dialogs.** Voice is the only input
+  path for now; a blocked session's question can only be answered by dictating a reply.
+- **HUD transcript scrollback.** The board shows only the current line per card, no
+  history.
+- **Package `glasses/` into the installed Python package.** It ships in the git tree
+  but not in the wheel, so the static mount only works from a source checkout — the
+  feature is dev/prototype-only until this is done.
+- **On-device verification.** Install the `evenhub` CLI, replace the placeholder
+  network whitelist and mic permission in `glasses/plugin/app.json`, `evenhub pack`,
+  sideload by QR, then verify (a) whether the G2 renders `index.html`'s DOM/CSS at all
+  "Glasses HUD" section of `CLAUDE.md`), and (b) whether a physical swipe actually
+  arrives as `SCROLL_TOP`/`SCROLL_BOTTOM`.
+
+---
+
 ## Phase 8: Community & Sharing
 
 **Why:** Open-source growth requires making Lumbergh easy to adopt, configure, and contribute to.

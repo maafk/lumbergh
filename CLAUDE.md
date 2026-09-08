@@ -123,6 +123,98 @@ the pane looked like, how long it had been still, and whether the pane had just
 changed shape (a viewer attaching resizes it, the agent redraws, and content-based
 detection reads the repaint as activity).
 
+## Glasses HUD
+
+`/glasses` is a 576x288 HUD page for supervising the fleet from Even Realities
+G2 smart glasses (or, today, any phone browser over Tailscale) — a swipeable
+deck of session cards plus voice dictation into whichever card is selected.
+It is plain ES modules under `glasses/` with no build step, deliberately kept
+out of the Vite app: the G2 plugin format wants plain web assets, not a
+bundled SPA. It's served by a static mount in `main.py` registered **before**
+`mount_frontend(app)` — that ordering is load-bearing, since `mount_frontend`
+installs a catch-all `/{path:path}` route that would otherwise swallow
+`/glasses`.
+
+`GET /api/glasses/board` (`backend/lumbergh/routers/glasses.py`) is the HUD's
+only read. `?wait=true` is a wake long poll: it holds the request open until
+something needs the wearer or the timeout elapses, so the page can sit idle
+without repolling. It deliberately does **not** reuse `bill.wait_fleet` for
+this — that function calls `_mark_seen`, which clears `session_attention`,
+the user's own dashboard unseen overlay. A pair of glasses long-polling in a
+pocket must never ack sessions the user never looked at; this is the single
+most important invariant in the feature. `test_glasses_router.py` guards it
+two ways: `test_glasses_borrows_only_the_row_builder_from_bill` asserts on the
+module's import graph (the HUD takes `_fleet_rows` from `bill` and nothing
+else, and `_fleet_rows` itself never marks seen), and
+`test_board_never_marks_sessions_seen` patches `bill._mark_seen` and asserts it
+is never called.
+
+`needs` is `fleet.ATTENTION_STATES` (`blocked` / `error` / `undelivered`) over
+every row — neither of the two predicates either side of it. Bill's
+viewer-scoped `bill._stamp_attention` resolves through `_direct_reports`, which
+keeps only workers whose `parent` is the viewer; no session has an overseer
+named "glasses", so that stamp is empty by construction and the HUD would never
+surface anything. `fleet.needs_attention` errs the other way: it also counts
+`idle + unseen`, and `unseen` is the user's own dashboard overlay, true of every
+session they left mid-thought — measured live, that had 10 of 12 quiet sessions
+claiming the wearer, so the HUD woke instantly and never went dark. **Idle is not
+asking.** Idle sessions still appear in the deck, are still browsable and still
+carry their outcome line; they just never set `needs` and never wake the long
+poll. The glasses are the user's view of the whole fleet, not a node in Bill's
+overseer/worker tree.
+
+`backend/lumbergh/glasses/summarize.py`'s `LINE_MAX` (currently 34; note the
+repo also has a top-level `glasses/` holding the client) is the one place the display
+character budget lives — change it there and nowhere else. Summarization is
+a best-effort embellishment on a deterministic truncation and never blocks
+or breaks the board: any provider failure or timeout degrades to the
+truncated line.
+
+The summarizer has its own provider config at `settings["glasses"]["summarizer"]`
+(`baseUrl` / `apiKey` / `model`) and never inherits the dashboard's `ai.provider`.
+On this machine that's `claude_cli`, and `claude -p` is far too slow and
+expensive for a view that refreshes on every fleet change. Unconfigured means
+deterministic lines only — a working HUD, not a stalled one. Measured on this
+hardware against Ollama at `llmbox:11434`: `qwen3.5:4b` returns empty content
+over the OpenAI-compatible `/v1` route (its reasoning tokens consume the
+response) and takes ~1.6s via the native `/api/chat` route while leaking its
+own character-counting into the text; `llama3.2:latest` answers cleanly in
+~3.9s but exceeds the 2s budget and drops identifiers the summarizer prompt
+asks it to keep verbatim. No LiteLLM proxy was reachable. This is why the
+deterministic path is the default, not a fallback of last resort. That key is
+reachable only by hand-editing `~/.config/lumbergh/settings.json`:
+`SettingsUpdate` in `routers/settings.py` has no `glasses` field, so the API
+strips it. Deliberate while the summarizer stays off by default — add the
+Pydantic field when it earns a place in the settings UI.
+
+The client deck holds its order still while the wearer swipes, but browsing is
+a *transient* posture: `BROWSE_HOLD_MS` in `glasses/main.js` returns it to rest
+a few seconds after the last swipe (never while a dictation is live). Without
+that, one swipe froze the deck for the life of the page — no new cards, no
+reordering, and no wake.
+
+Dictation (`glasses/dictate.js`) needs a reachable WhisperLive at
+`llmbox:9091` (see `glasses/stt-config.js`). It also needs a secure context
+for `getUserMedia`/`AudioWorklet` — `localhost` qualifies, a Tailscale
+hostname over plain HTTP does not.
+
+The Even app's WebView runs the page's JS and renders its DOM, but only on the
+phone — the lenses are a separate display, driven over BLE, showing only what is
+pushed as positioned containers ("no CSS, no flexbox, no DOM"). Confirmed on
+hardware: the page rendered in the app and the lenses stayed blank. `glasses/lens.js`
+is therefore what the wearer actually sees; it pushes the same card the DOM shows as
+text containers through the SDK vendored in `glasses/vendor/`, and `index.html` is the
+phone-side preview and desktop debugging path on the same 576x288 frame. Firmware
+limits: 8 text containers max, `containerTotalNum` 1..12, brightness 0..4.
+
+The SDK is vendored rather than installed because it can be — zero dependencies,
+`type: module`, no bare imports — which keeps the HUD's no-build-step property while
+still reaching the glasses. `window.EvenAppBridge` does not exist until that SDK
+initialises it; the host injects only `window.flutter_inappwebview` and
+`__EVEN_HUB_APP_ID__`. `?debug=1` reports what the WebView exposes to
+`POST /api/glasses/probe`, which writes `~/.config/lumbergh/glasses-probe.json` — that
+WebView has no console.
+
 ## Debugging Event Loop Lag
 
 A permanent watchdog in `main.py` logs to `/tmp/lumbergh-lag.log` whenever the event loop is blocked >200ms, including thread stacks. If the terminal feels laggy:
