@@ -124,6 +124,36 @@ export async function quitLens() {
   }
 }
 
+/**
+ * What a host event means, or null for the ones we do not act on.
+ *
+ * Recorded from a real device (79 events via the probe): a click arrives as a `sysEvent`
+ * whose `eventType` the host's JSON decoding drops from 0 to `undefined`, while scrolls
+ * arrive as a `textEvent` with 1 or 2. That combination is a trap — reading "type is
+ * undefined" as a click across *all* event kinds turns any unrecognised event into a
+ * phantom tap, so only a sysEvent is allowed to be one.
+ */
+export function classify(event) {
+  const sys = event?.sysEvent;
+  const other = event?.textEvent ?? event?.listEvent;
+  if (sys) {
+    const type = sys.eventType;
+    if (type === OsEventTypeList.CLICK_EVENT || type === undefined) return "press";
+    if (type === OsEventTypeList.DOUBLE_CLICK_EVENT) return "doublePress";
+    if (type === OsEventTypeList.SCROLL_TOP_EVENT) return "swipeUp";
+    if (type === OsEventTypeList.SCROLL_BOTTOM_EVENT) return "swipeDown";
+    if (type === OsEventTypeList.LONG_PRESS_EVENT) return "holdStart";
+    if (type === OsEventTypeList.LONG_PRESS_RELEASE_EVENT) return "holdEnd";
+    return null;
+  }
+  if (other) {
+    // A text or list container's own event: scroll boundaries, and nothing else we use.
+    if (other.eventType === OsEventTypeList.SCROLL_TOP_EVENT) return "swipeUp";
+    if (other.eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) return "swipeDown";
+  }
+  return null;
+}
+
 /** True once the bridge is up, i.e. we are running inside the Even app. */
 export function lensActive() {
   return Boolean(bridge);
@@ -208,10 +238,22 @@ export async function initLens({
 
   // A bridge method, not a window event — an earlier version listened on window and so
   // never received anything. Returns an unsubscribe, unused: this lives for the page.
+  // One physical action can produce more than one event — a tap that lingers arrives as
+  // a click *and* a long press — so a gesture claims a short window and the rest are
+  // dropped. Without it, tapping to send also opened the microphone.
+  const GESTURE_WINDOW_MS = 400;
+  let lastGestureAt = 0;
+  const claim = (fn) => {
+    const now = Date.now();
+    if (now - lastGestureAt < GESTURE_WINDOW_MS) return;
+    lastGestureAt = now;
+    fn?.();
+  };
+
+  // A bridge method, not a window event — an earlier version listened on window and so
+  // never received anything. Returns an unsubscribe, unused: this lives for the page.
   bridge.onEvenHubEvent((event) => {
     reportEvent(event);
-    const type =
-      event?.sysEvent?.eventType ?? event?.textEvent?.eventType ?? event?.listEvent?.eventType;
     if (event?.audioEvent) {
       const samples = audioSink && toInt16(event.audioEvent.audioPcm);
       if (samples) {
@@ -221,15 +263,30 @@ export async function initLens({
       }
       return;
     }
-    if (type === OsEventTypeList.IMU_DATA_REPORT) return;
-
-    // CLICK_EVENT is 0, which the host's JSON decoding sometimes drops to undefined.
-    if (type === OsEventTypeList.CLICK_EVENT || type === undefined) onPress?.();
-    else if (type === OsEventTypeList.DOUBLE_CLICK_EVENT) onDoublePress?.();
-    else if (type === OsEventTypeList.SCROLL_TOP_EVENT) onSwipeUp?.();
-    else if (type === OsEventTypeList.SCROLL_BOTTOM_EVENT) onSwipeDown?.();
-    else if (type === OsEventTypeList.LONG_PRESS_EVENT) onHoldStart?.();
-    else if (type === OsEventTypeList.LONG_PRESS_RELEASE_EVENT) onHoldEnd?.();
+    switch (classify(event)) {
+      case "press":
+        claim(onPress);
+        break;
+      case "doublePress":
+        claim(onDoublePress);
+        break;
+      case "swipeUp":
+        claim(onSwipeUp);
+        break;
+      case "swipeDown":
+        claim(onSwipeDown);
+        break;
+      // Push to talk is not part of the mutual-exclusion window: the release must always
+      // be able to close a recording the press opened, however soon it comes.
+      case "holdStart":
+        onHoldStart?.();
+        break;
+      case "holdEnd":
+        onHoldEnd?.();
+        break;
+      default:
+        break;
+    }
   });
 
   return true;

@@ -2,19 +2,23 @@
   "package_id": "com.lumbergh.hud",
   "edition": "202601",
   "name": "Lumbergh HUD",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "min_app_version": "2.2.10",
   "min_sdk_version": "0.0.15",
   "tagline": "Supervise your Claude Code sessions from your glasses",
   "description": "Shows a swipeable deck of your live Lumbergh AI coding sessions \u2014 one card per session, state and next line at a glance \u2014 and lets you dictate a reply into whichever one you're looking at.",
   "author": "Jim Vogel",
   "entrypoint": "index.html",
-  "supported_languages": ["en"],
+  "supported_languages": [
+    "en"
+  ],
   "permissions": [
     {
       "name": "network",
       "desc": "Reads the session board and sends dictated replies to your Lumbergh server.",
-      "whitelist": ["https://desktop.tail1a4967.ts.net"]
+      "whitelist": [
+        "https://desktop.tail1a4967.ts.net"
+      ]
     },
     {
       "name": "phone-microphone",

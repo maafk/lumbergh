@@ -3,6 +3,7 @@ import { fetchBoard } from "./board.js";
 import { createDeck } from "./deck.js";
 import { startDictation } from "./dictate.js";
 import { createReader } from "./detail.js";
+import { getTextWidth, pxTruncate } from "./vendor/pretext-0.1.4.js";
 import { initLens, quitLens, renderLens } from "./lens.js";
 import { bindTouch } from "./touch.js";
 
@@ -42,10 +43,29 @@ let heardText = "";
 // old one-card-at-a-time view spent nine lines saying nothing, and needed an ambient
 // screen and a browsing-stability apparatus to make up for it.
 const LIST_ROWS = 10;
+const FRAME_W = 576;
 // The selection sits here, always. Scrolling a window and letting the cursor wander
 // inside it means hunting for it after every swipe; a fixed row means the eye never
 // moves and the list travels underneath.
 const CURSOR_ROW = Math.floor(LIST_ROWS / 2);
+
+// How long a session has been in its state, short enough to sit on a list line. A
+// spinner was the obvious answer and the wrong one: every candidate marker jitters in
+// width in this proportional font, so it would shove the line sideways each tick — and
+// the board long-polls, so there is no regular tick to animate on anyway. The age is
+// real information, and "asking 6m" answers the question a spinner cannot: is it stuck?
+function age(seconds) {
+  if (seconds === null || seconds === undefined) return "";
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  return `${Math.round(s / 3600)}h`;
+}
+
+// Only the states where time elapsed means something. An idle session's age is not
+// something the wearer acts on, and the width is better spent on the name.
+const TIMED_STATES = new Set(["working", "blocked", "error", "undelivered"]);
+const AGE_TICK_MS = 10000;
 
 function listLines() {
   const cards = deck.all();
@@ -58,10 +78,17 @@ function listLines() {
     const card = cards[(((cursor + offset) % cards.length) + cards.length) % cards.length];
     const here = offset === 0;
     const state = card.state === "blocked" ? "asking" : card.state;
+    const elapsed = TIMED_STATES.has(card.state) ? ` ${age(card.since)}` : "";
     // A worker is indented under its overseer; the board orders them adjacently so the
     // indent reads as a hierarchy rather than as decoration.
     const indent = "  ".repeat(card.depth ?? 0);
-    lines.push(`${here ? ">" : " "}${card.needs ? "!" : " "} ${indent}${card.name} · ${state}`);
+    const prefix = `${here ? ">" : " "}${card.needs ? "!" : " "} ${indent}`;
+    const suffix = ` · ${state}${elapsed}`;
+    // A line that wraps would push every row below it down and move the selection off
+    // the centre row, so the name gives way instead. Measured, not counted — the font is
+    // proportional and this is the firmware's own metric.
+    const room = FRAME_W - getTextWidth(prefix + suffix);
+    lines.push(prefix + pxTruncate(card.name, room) + suffix);
   }
   return lines;
 }
@@ -386,8 +413,12 @@ initLens({
   // forgetting the second tap.
   // Dictation belongs to the reader, where the wearer can see what they are replying
   // to. Holding the temple on the list would be talking into a name.
+  //
+  // And never while words are waiting on a decision: starting a fresh recording would
+  // overwrite them with no way back, and this is the state a stray long-press landed in
+  // when one tap arrived as both a click and a hold.
   onHoldStart: () => {
-    if (reader.isOpen() && !session) press();
+    if (reader.isOpen() && !session && !pending) press();
   },
   onHoldEnd: () => {
     if (session) press();
@@ -456,4 +487,12 @@ if (new URLSearchParams(location.search).has("debug")) {
   document.body.appendChild(pre);
 } else {
   loop();
+  // The board long-polls, so nothing re-renders while a session simply keeps working and
+  // its age would freeze on the glass. A slow local tick keeps it honest. renderLens
+  // drops unchanged content, so this costs a BLE round trip only when a displayed age
+  // actually rolls over — past the first minute, at most once a minute per session.
+  setInterval(() => {
+    if (reader.isOpen()) return;
+    if (deck.all().some((card) => TIMED_STATES.has(card.state))) render();
+  }, AGE_TICK_MS);
 }
